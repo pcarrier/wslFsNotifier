@@ -33,9 +33,6 @@ __asm__(".symver memcpy,memcpy@GLIBC_2.0");
 __asm__(".symver memcpy,memcpy@GLIBC_2.2.5");
 #endif
 
-
-#define WATCH_COUNT_NAME "/proc/sys/fs/inotify/max_user_watches"
-
 #define DEFAULT_SUBDIR_COUNT 5
 
 typedef struct __watch_node {
@@ -47,7 +44,7 @@ typedef struct __watch_node {
 } watch_node;
 
 static int inotify_fd = -1;
-static int watch_count = 0;
+static int watch_count = 1048576;
 static table* watches;
 static bool limit_reached = false;
 static void (* callback)(const char*, int) = NULL;
@@ -58,7 +55,6 @@ static char event_buf[EVENT_BUF_LEN];
 
 static char path_buf[2 * PATH_MAX];
 
-static void read_watch_descriptors_count();
 static void watch_limit_reached();
 
 
@@ -74,14 +70,6 @@ bool init_inotify() {
   }
   userlog(LOG_DEBUG, "inotify fd: %d", get_inotify_fd());
 
-  read_watch_descriptors_count();
-  if (watch_count <= 0) {
-    close(inotify_fd);
-    inotify_fd = -1;
-    return false;
-  }
-  userlog(LOG_INFO, "inotify watch descriptors: %d", watch_count);
-
   watches = table_create(watch_count);
   if (watches == NULL) {
     userlog(LOG_ERR, "out of memory");
@@ -92,25 +80,6 @@ bool init_inotify() {
 
   return true;
 }
-
-static void read_watch_descriptors_count() {
-  FILE* f = fopen(WATCH_COUNT_NAME, "r");
-  if (f == NULL) {
-    userlog(LOG_ERR, "can't open %s: %s", WATCH_COUNT_NAME, strerror(errno));
-    return;
-  }
-
-  char* str = read_line(f);
-  if (str == NULL) {
-    userlog(LOG_ERR, "can't read from %s", WATCH_COUNT_NAME);
-  }
-  else {
-    watch_count = atoi(str);
-  }
-
-  fclose(f);
-}
-
 
 void set_inotify_callback(void (* _callback)(const char*, int)) {
   callback = _callback;
